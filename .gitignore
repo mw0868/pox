@@ -60,3 +60,6 @@ target/
 # PyCharm
 .idea/
 
+# OpenCV Haar Cascades
+haar*.xml
+
