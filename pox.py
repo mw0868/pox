@@ -12,6 +12,8 @@ App class
 
 import sys
 import Queue
+import time
+import os
 
 import cv2
 
@@ -21,6 +23,39 @@ import poxrec
 import poxcom
 import poxfsm
 import poxcv
+
+
+def make_movie(img_path):
+    """Generate an MOV file from a directory of PNG files."""
+
+    # gather file names of frames
+    img_files = []
+    for (dirpath, dirnames, filenames) in os.walk(img_path):
+        img_files.extend(filenames)
+        break
+
+    # only consider PNG files
+    img_files = [each for each in img_files if each.rfind(".png") > 0]
+    if len(img_files) == 0:
+        print "No PNG files found!"
+        return
+
+    # determine size of frames
+    file_path = os.path.join(img_path, img_files[0])
+    size = cv2.cv.GetSize(cv2.cv.LoadImage(file_path))
+
+    # build movie from separate frames
+    # TODO -- may need to change FPS on different systems
+    fps = 15
+    movie_path = os.path.join(img_path, "movie.mov")
+    video_maker = cv2.VideoWriter(movie_path,
+                                  cv2.cv.CV_FOURCC('m', 'p', '4', 'v'),
+                                  fps, size)
+    if video_maker.isOpened():
+        for each in img_files:
+            file_path = os.path.join(img_path, each)
+            img = cv2.imread(file_path)
+            video_maker.write(img)
 
 
 class App(object):
@@ -58,11 +93,52 @@ class App(object):
         self.s_strikes = ""
         self.phrase = ""
 
+        # frame capture and recording
+        self.record_enable = False
+        self.record_ct = 0
+        self.record_clip = 0
+        self.record_sfps = "???"
+        self.record_t0 = 0.0
+        self.record_k = 0
+        self.record_path = os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), "movie")
+        self.record_ok = os.path.isdir(self.record_path)
+
         # scale the face detection ROI
         # will chop a percentage from top/bottom and left/right
         # can only use values in the range 0.0 - 0.5
         self.roi_perc_h = 0.1
         self.roi_perc_w = 0.2
+
+    def reset_fps(self):
+        self.record_t0 = time.time()
+        self.record_k = 0
+        self.record_sfps = "???"
+
+    def update_fps(self):
+        # recalculate frames-per-second every 100 frames
+        self.record_k += 1
+        if self.record_k == 100:
+            t1 = time.time()
+            tx = t1 - self.record_t0
+            self.record_t0 = t1
+            self.record_sfps = "{:.1f}".format(float(self.record_k) / tx)
+            self.record_k = 0
+
+    def record_frame(self, frame, name_prefix):
+        """Record frames to sequentially numbered files if enabled."""
+        if self.record_ok and self.record_enable:
+            file_name = name_prefix
+            if file_name is None or len(file_name) == 0:
+                file_name = "frame"
+            file_name += "_"
+            file_name += str(self.record_clip).zfill(2)
+            file_name += "_"
+            file_name += str(self.record_ct).zfill(5)
+            file_name += ".png"
+            file_path = os.path.join(self.record_path, file_name)
+            self.record_ct += 1
+            cv2.imwrite(file_path, frame)
 
     def get_roi(self, h, w):
         """
@@ -94,16 +170,18 @@ class App(object):
         # press '?' while monitor has focus
         # to see this menu
         print "? - Display help."
-        print "1 - Toggle Eye detection."
+        print "1 - Toggle eye detection."
         print "g - Go. Restarts monitoring."
         print "h - Halt. Stops monitoring and any external action."
         print "L - Start scripted speech mode.  Only valid when monitoring."
+        print "M - Make MOV movie file from recorded video frames."
         print "s - (Test) Say next phrase from file."
         print "r - (Test) Recognize phrase that was last spoken."
         print "Q - Quit."
+        print "V - Toggle video recording."
         print "ESC - Quit."
 
-    def show_monitor_window(self, img, boxes):
+    def show_monitor_window(self, img, boxes, sfps):
         # update display items
         status_color = App.color[self.cvsm.snapshot["color"]]
         s_label = self.cvsm.snapshot["label"]
@@ -144,6 +222,15 @@ class App(object):
         cv2.putText(img_final, self.s_strikes, (10, hn * 2 + 14),
                     cv2.FONT_HERSHEY_PLAIN, 1.0, App.color["white"], 2)
 
+        # frames per second and recording status
+        fps_color = "red" if self.record_enable is True else "black"
+        cv2.rectangle(img_final, (0, hn * 3), (wn, hn * 4),
+                      App.color[fps_color], cv2.cv.CV_FILLED)
+        cv2.rectangle(img_final, (0, hn * 3), (wn, hn * 4),
+                      App.color["white"])
+        cv2.putText(img_final, sfps, (10, hn * 3 + 14),
+                    cv2.FONT_HERSHEY_PLAIN, 1.0, App.color["white"], 2)
+
         # draw speech recognition progress (timeout) bar if active
         # just a black rectangle that gets filled with gray blocks
         # there's a yellow warning bar at ideal timeout time
@@ -176,6 +263,8 @@ class App(object):
             cv2.circle(img_final, (e_x + e_dx, e_y), 1, App.color["black"],
                        cv2.cv.CV_FILLED)
 
+        # record frame if enabled and update monitor
+        self.record_frame(img_final, "img")
         cv2.imshow("POX Monitor", img_final)
 
     def wait_and_check_keys(self, event_list):
@@ -204,6 +293,20 @@ class App(object):
                 self.thread_rec.post_cmd('hear', self.phrase)
         elif key == ord('?'):
             App.show_help()
+        elif key == ord('V'):
+            if self.record_ok:
+                if self.record_enable is True:
+                    self.record_enable = False
+                else:
+                    # new clip, reset frame ct
+                    self.record_enable = True
+                    self.record_clip += 1
+                    self.record_ct = 0
+        elif key == ord('M'):
+            print "Begin making movie"
+            make_movie(self.record_path)
+            print "Finished"
+            self.reset_fps()
         return result
 
     def loop(self):
@@ -228,6 +331,8 @@ class App(object):
 
         # this must persist between iterations
         events = []
+
+        self.reset_fps()
 
         while True:
 
@@ -308,7 +413,8 @@ class App(object):
                     self.s_strikes = ""
 
             # update displays
-            self.show_monitor_window(img_small, boxes)
+            self.update_fps()
+            self.show_monitor_window(img_small, boxes, self.record_sfps)
 
             # final step is to check keys
             # key events will be handled next iteration
@@ -329,6 +435,8 @@ class App(object):
         print "*** Python OpenCV Example (POX) ***"
         print "OS: ", sys.platform
         print "EXE:", sys.executable
+        if not self.record_ok:
+            print "Recording disabled.  Path not found:", self.record_path
 
         # lazy hard-code for the port settings
         # (used a Keyspan USB-Serial adapter)
