@@ -90,6 +90,7 @@ class App(object):
 
         # state stuff best suited to top-level app
         self.b_eyes = True
+        self.b_grin = False
         self.s_strikes = ""
         self.phrase = ""
 
@@ -171,6 +172,7 @@ class App(object):
         # to see this menu
         print "? - Display help."
         print "1 - Toggle eye detection."
+        print "2 - Toggle smile detection."
         print "g - Go. Restarts monitoring."
         print "h - Halt. Stops monitoring and any external action."
         print "L - Start scripted speech mode.  Only valid when monitoring."
@@ -263,6 +265,13 @@ class App(object):
             cv2.circle(img_final, (e_x + e_dx, e_y), 1, App.color["black"],
                        cv2.cv.CV_FILLED)
 
+        # draw grin detection state indicator (curve like a grin)
+        if self.b_grin:
+            g_x = 34
+            g_y = 28
+            cv2.ellipse(img_final, (g_x, g_y), (5, 3), 0, 0, 180,
+                        App.color["white"], 2)
+
         # record frame if enabled and update monitor
         self.record_frame(img_final, "img")
         cv2.imshow("POX Monitor", img_final)
@@ -279,6 +288,9 @@ class App(object):
         elif key == ord('1'):
             # toggle eye detection
             self.b_eyes = not self.b_eyes
+        elif key == ord('2'):
+            # toggle grin detection
+            self.b_grin = not self.b_grin
         elif key in poxfsm.USER_KEYS:
             event_list.append(poxfsm.SMEvent(poxfsm.SMEvent.E_KEY, key))
         elif key == ord('s'):
@@ -338,14 +350,14 @@ class App(object):
 
             # process images frame-by-frame
             # grab image, downsize, extract ROI, run detection
-            # b_found will be result of face/eye detection
+            # b_found will be result of face/eye/grin detection
             # boxes have data for drawing rectangles for what was detected
             ret, img = vcap.read()
             img_small = cv2.resize(img, (0, 0), fx=img_scale, fy=img_scale)
             h, w = img_small.shape[:2]
             h1, h2, w1, w2 = self.get_roi(h, w)
             imgx = img_small[h1:h2, w1:w2]
-            b_found, boxes = self.cvx.detect(imgx, self.b_eyes)
+            b_found, boxes = self.cvx.detect(imgx, self.b_eyes, self.b_grin)
 
             # propagate face/eye found event
             if b_found:

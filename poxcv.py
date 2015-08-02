@@ -5,7 +5,7 @@
 The CVMain class wraps the Python OpenCV functionality.
 
 - Cascade Initialization
-- Single pass of Face and Eye finder
+- Single pass of Face, Eye, and Grin finder
 
 """
 
@@ -18,6 +18,7 @@ class CVMain(object):
 
         self.cc_face = cv2.CascadeClassifier()
         self.cc_eyes = cv2.CascadeClassifier()
+        self.cc_grin = cv2.CascadeClassifier()
 
         # assume face will be "big"
         # and eyes will be smaller
@@ -25,19 +26,31 @@ class CVMain(object):
         self.size_face = (60, 60)
         self.size_eyes = (18, 18)
 
+        # grin detection tweak
+        # - use 2 for mouth detector
+        # - use big number like 70-140 for smile detector
+        # TODO -- tune during start-up ?
+        self.magic = 140
+
     def load_cascades(self, path):
-        # try to load standard OpenCV face and eyes cascades
+        # try to load standard OpenCV face/eyes/grin cascades
         face_cascade_name = path + "haarcascade_frontalface_alt.xml"
         eyes_cascade_name = path + "haarcascade_eye_tree_eyeglasses.xml"
+        grin_cascade_name = path + "haarcascade_smile.xml"
+        #grin_cascade_name = "haarcascade_mcs_mouth.xml"
+
         if not self.cc_face.load(face_cascade_name):
             print "Face cascade data failed to open:", face_cascade_name
             return False
         if not self.cc_eyes.load(eyes_cascade_name):
             print "Eyes cascade data failed to open:", eyes_cascade_name
             return False
+        if not self.cc_grin.load(path + grin_cascade_name):
+            print "Grin cascade data failed to open."
+            return False
         return True
 
-    def detect(self, img_rgb, use_eyes=True):
+    def detect(self, img_rgb, use_eyes=True, use_grin=False):
 
         # convert to gray
         # and equalize (since demo code does this too)
@@ -59,13 +72,13 @@ class CVMain(object):
                 # create face box with sub-boxes for eyes and mouth
                 # horizontal line 5/8 from top of face box
                 # to separate mouth region and rest of face
-                # TODO -- maybe add mouth or smile detection
                 face_x, face_y = face[:2]
                 face_w, face_h = face[2:]
                 yfrac = (face_h * 5) / 8
                 halfx = face_x + face_w / 2
                 y1 = face_y
                 x1 = face_x
+
                 boxes.append([(x1, y1), (halfx, y1 + yfrac)])
                 boxes.append([(halfx, y1), (x1 + face_w, y1 + yfrac)])
                 boxes.append([(x1, y1 + yfrac), (x1 + face_w, y1 + face_h)])
@@ -93,6 +106,35 @@ class CVMain(object):
                         eye_pt1 = (face_x + eye_x, face_y + eye_y)
                         eye_pt2 = (eye_pt1[0] + eye_w, eye_pt1[1] + eye_h)
                         boxes.append([eye_pt1, eye_pt2])
+
+                if use_grin:
+                    # increase upper/lower bounds on mouth region
+                    # need even bigger lower bounds if using "mouth" detector
+                    # (makes it possible to detect wide-open mouth)
+                    inc_y = (face_h / 8)
+                    y1m = (y1 + yfrac) - inc_y
+                    y2m = (y1 +face_h) + inc_y
+
+                    # try to find grin in mouth area
+                    grin_roi = r[y1m:y2m, x1:x1 + face_w]
+                    gw = (face_w * 3) / 8  # min 3/8 of mouth region w
+                    gh = (face_h - yfrac) / 3  # min 1/3 of mouth region h
+                    obj_grin = self.cc_grin.detectMultiScale(grin_roi, 1.1,
+                                                             self.magic, 0,
+                                                             (gw, gh))
+
+                    # apply grin detection to found flag
+                    b_found = b_found and (len(obj_grin) > 0)
+
+                    # generate grin box data
+                    for grin in obj_grin:
+                        grin_x, grin_y = grin[:2]
+                        grin_w, grin_h = grin[2:]
+                        grin_pt1 = (face_x + grin_x,
+                                    face_y + yfrac + grin_y - inc_y)
+                        grin_pt2 = (grin_pt1[0] + grin_w,
+                                    grin_pt1[1] + grin_h)
+                        boxes.append([grin_pt1, grin_pt2])
 
         # return a flag indicating success if all desired features found
         # and a list of data for drawing boxes around what was found
