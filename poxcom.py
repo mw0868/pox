@@ -255,6 +255,9 @@ class Com(object):
             self._cmd_rx_queue.task_done()
             stokens = item.split()
             cmd = stokens[0]
+            param = None
+            if len(stokens) > 1:
+                param = chr(int(stokens[1]))
 
             data = None
             if cmd == "hbu":
@@ -263,6 +266,10 @@ class Com(object):
                 data = b'\x02\x02\x00\x03'
             elif cmd == "rst":
                 data = b'\x02\x01\x18'
+            elif cmd == "dig0_cfg" and param is not None:
+                data = b'\x02\x03\x1A\x00' + param
+            elif cmd == "dig0_io" and param is not None:
+                data = b'\x02\x03\x1B\x00' + param
 
             if data is not None:
                 try:

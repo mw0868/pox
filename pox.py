@@ -93,6 +93,7 @@ class App(object):
         self.b_grin = False
         self.s_strikes = ""
         self.phrase = ""
+        self.n_z = 0
 
         # frame capture and recording
         self.record_enable = False
@@ -111,7 +112,15 @@ class App(object):
         self.roi_perc_h = 0.1
         self.roi_perc_w = 0.2
 
+    def check_z(self):
+        # timer for output "Z" test
+        if self.n_z > 0:
+            self.n_z -= 1
+            if self.n_z == 0:
+                self.external_action(False)
+
     def reset_fps(self):
+        # clear FPS calculation data
         self.record_t0 = time.time()
         self.record_k = 0
         self.record_sfps = "???"
@@ -160,10 +169,14 @@ class App(object):
         Sends command to an external serial device.
         """
         if flag:
-            # just a dummy command for now
-            self.thread_com.post_cmd("rst", "")
+            # configure digital pin as output and turn on
+            self.thread_com.post_cmd("dig0_cfg", "0")
+            self.thread_com.post_cmd("dig0_io", "1")
             print "EXT ON", data
         else:
+            # turn off digital pin and configure as input
+            self.thread_com.post_cmd("dig0_io", "0")
+            self.thread_com.post_cmd("dig0_cfg", "1")
             print "EXT OFF"
 
     @staticmethod
@@ -181,6 +194,7 @@ class App(object):
         print "r - (Test) Recognize phrase that was last spoken."
         print "Q - Quit."
         print "V - Toggle video recording."
+        print "Z - (Test) Activate external output for half-second."
         print "ESC - Quit."
 
     def show_monitor_window(self, img, boxes, sfps):
@@ -305,6 +319,9 @@ class App(object):
                 self.thread_rec.post_cmd('hear', self.phrase)
         elif key == ord('?'):
             App.show_help()
+        elif key == ord('Z'):
+            self.n_z = 10
+            self.external_action(True)
         elif key == ord('V'):
             if self.record_ok:
                 if self.record_enable is True:
@@ -427,6 +444,7 @@ class App(object):
             # update displays
             self.update_fps()
             self.show_monitor_window(img_small, boxes, self.record_sfps)
+            self.check_z()
 
             # final step is to check keys
             # key events will be handled next iteration

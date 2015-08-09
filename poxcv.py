@@ -22,6 +22,7 @@ class CVMain(object):
 
         # assume face will be "big"
         # and eyes will be smaller
+        # suitable limits here will increase frame rate
         # TODO -- this might depend on scale (currently fixed at 0.5)
         self.size_face = (60, 60)
         self.size_eyes = (18, 18)
@@ -88,7 +89,7 @@ class CVMain(object):
                     # seek eyes in face region
                     # use "4" for rectangle threshold (fewer False detections)
                     # assume frame is "good" if more than 2 eyes
-                    face_roi = r[y1:y1 + face_h, x1:x1 + face_w]
+                    face_roi = r[y1:y1 + yfrac, x1:x1 + face_w]
                     obj_eyes = self.cc_eyes.detectMultiScale(face_roi, 1.1, 4,
                                                              0,
                                                              self.size_eyes)
@@ -111,9 +112,9 @@ class CVMain(object):
                     # increase upper/lower bounds on mouth region
                     # need even bigger lower bounds if using "mouth" detector
                     # (makes it possible to detect wide-open mouth)
-                    inc_y = (face_h / 8)
-                    y1m = (y1 + yfrac) - inc_y
-                    y2m = (y1 +face_h) + inc_y
+                    # inc_y = (face_h / 8)
+                    y1m = (y1 + yfrac) # - inc_y
+                    y2m = (y1 +face_h) # + inc_y
 
                     # try to find grin in mouth area
                     grin_roi = r[y1m:y2m, x1:x1 + face_w]
@@ -127,11 +128,12 @@ class CVMain(object):
                     b_found = b_found and (len(obj_grin) > 0)
 
                     # generate grin box data
+                    # must uncomment offset below if using bigger mouth region
                     for grin in obj_grin:
                         grin_x, grin_y = grin[:2]
                         grin_w, grin_h = grin[2:]
                         grin_pt1 = (face_x + grin_x,
-                                    face_y + yfrac + grin_y - inc_y)
+                                    face_y + yfrac + grin_y) # - inc_y)
                         grin_pt2 = (grin_pt1[0] + grin_w,
                                     grin_pt1[1] + grin_h)
                         boxes.append([grin_pt1, grin_pt2])
