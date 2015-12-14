@@ -3,7 +3,7 @@ Python OpenCV Example
 
 This project was an excuse to play with a variety of Python libraries.
 
-I used Mac OS X and Python 2.7.6.  It has been tested with Mac OS X El Capitan:  10.11.2.
+It has been tested with Mac OS X (El Capitan) 10.11.2 and Python 2.7.10.
 
 The application looks at a user's face and speaks phrases and listens for them to be repeated.
 What's that good for?  I don't know.  But I learned a lot.  The app uses a bunch of libraries...
