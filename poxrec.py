@@ -59,7 +59,7 @@ class RecWrapper(object):
 
         if audio is not None:
             try:
-                s = self.r.recognize(audio)
+                s = self.r.recognize_google(audio)
                 if s == "this is a test":
                     result = "Speech Recognition OK"
                     self.ok = True
@@ -83,20 +83,27 @@ class RecWrapper(object):
                     # (maybe because of loud washing machine in background?)
                     # audio = self.r.adjust_for_ambient_noise(source)
                     audio = self.r.listen(source, timeout)
-                except NameError:
-                    # should throw TimeoutError according to docs
-                    # but it is undefined so this will have to do
+                except sr.WaitTimeoutError:
                     pass
 
             # then run recognizer (if we got some audio)
+            # multiple possibilities will be in
+            # the 'alternative' list of the result dict
             if audio is not None:
                 try:
-                    ss = self.r.recognize(audio, show_all=True)
-                    for each in ss:
-                        if each['text'] == phrase:
+                    ss = self.r.recognize_google(audio, show_all=True)
+                    for each in ss['alternative']:
+                        s_possible_phrase = each['transcript']
+                        print s_possible_phrase
+                        if s_possible_phrase == phrase:
+                            # match found!
                             result = True
                             break
+                except TypeError:
+                    # result was empty
+                    pass
                 except LookupError:
+                    # invalid dictionary
                     pass
 
         return result
